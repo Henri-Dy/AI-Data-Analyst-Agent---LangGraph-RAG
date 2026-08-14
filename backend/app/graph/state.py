@@ -42,8 +42,10 @@ class GraphState(TypedDict, total=False):
 
     # --- Insight Agent / Fact Checker / Report Generator (Phase 8) ---
     insights: str | None
+    insight_claims: list[dict[str, Any]]
     confidence: float | None
     fact_check_notes: list[str]
+    human_review: dict[str, Any] | None
     final_report: dict[str, Any] | None
 
     # --- Cross-cutting ---

@@ -11,6 +11,12 @@ SQL_EXECUTOR = "sql_executor"
 SQL_GIVE_UP = "sql_give_up"
 PYTHON_ANALYST = "python_analyst"
 VISUALIZATION_AGENT = "visualization_agent"
+INSIGHT_AGENT = "insight_agent"
+FACT_CHECKER = "fact_checker"
+# Not "human_review" — that name collides with the GraphState field of the
+# same name (LangGraph forbids a node sharing a name with a state channel).
+HUMAN_REVIEW = "human_review_node"
+REPORT_GENERATOR = "report_generator"
 
 
 def route_after_query_analysis(state: GraphState) -> list[str]:
@@ -50,3 +56,13 @@ def route_after_sql_execution(state: GraphState) -> str:
     if state.get("requires_statistics"):
         return PYTHON_ANALYST
     return VISUALIZATION_AGENT
+
+
+def route_after_fact_check(state: GraphState, confidence_threshold: float) -> str:
+    """Confidence below threshold routes to Human Review before the report
+    is assembled; a narrative with no unverified claims (or none at all)
+    proceeds straight to the Report Generator."""
+    confidence = state.get("confidence")
+    if confidence is not None and confidence < confidence_threshold:
+        return HUMAN_REVIEW
+    return REPORT_GENERATOR

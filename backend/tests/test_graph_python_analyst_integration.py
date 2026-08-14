@@ -7,6 +7,7 @@ execution.
 """
 from langchain_community.embeddings import DeterministicFakeEmbedding
 
+from app.agents.insight_agent import InsightGeneration
 from app.agents.query_analyzer import QueryAnalysis
 from app.agents.sql_generator import SQLGeneration
 from app.database.models.rag_documents import EMBEDDING_DIM
@@ -30,6 +31,11 @@ class FakeSQLGenerator:
         return SQLGeneration(sql=self.sql, reasoning="fake")
 
 
+class FakeInsightAgent:
+    def invoke(self, prompt_input: dict) -> InsightGeneration:
+        return InsightGeneration(narrative="Here is the answer.", claims=[])
+
+
 def _build(analysis: QueryAnalysis, sql: str):
     return build_graph(
         analyzer=FakeAnalyzer(analysis),
@@ -38,6 +44,7 @@ def _build(analysis: QueryAnalysis, sql: str):
         embeddings=DeterministicFakeEmbedding(size=EMBEDDING_DIM),
         sql_generator=FakeSQLGenerator(sql),
         sql_fixer=FakeSQLGenerator(sql),
+        insight_agent=FakeInsightAgent(),
     )
 
 

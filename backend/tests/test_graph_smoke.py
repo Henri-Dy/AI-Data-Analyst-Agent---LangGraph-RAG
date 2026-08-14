@@ -5,6 +5,7 @@ LLM provider — only the real local Postgres/pgvector instance is used.
 """
 from langchain_community.embeddings import DeterministicFakeEmbedding
 
+from app.agents.insight_agent import InsightGeneration
 from app.agents.query_analyzer import QueryAnalysis
 from app.agents.sql_generator import SQLGeneration
 from app.database.models.rag_documents import EMBEDDING_DIM
@@ -28,6 +29,15 @@ class FakeSQLGenerator:
         return SQLGeneration(sql="SELECT id FROM orders LIMIT 5", reasoning="fake")
 
 
+class FakeInsightAgent:
+    """No claims -> the Fact Checker trivially verifies at full confidence,
+    so the graph runs straight through to the Report Generator without
+    pausing for human review."""
+
+    def invoke(self, prompt_input: dict) -> InsightGeneration:
+        return InsightGeneration(narrative="Here is the answer.", claims=[])
+
+
 def _build_test_graph(analysis: QueryAnalysis):
     return build_graph(
         analyzer=FakeAnalyzer(analysis),
@@ -36,6 +46,7 @@ def _build_test_graph(analysis: QueryAnalysis):
         embeddings=DeterministicFakeEmbedding(size=EMBEDDING_DIM),
         sql_generator=FakeSQLGenerator(),
         sql_fixer=FakeSQLGenerator(),
+        insight_agent=FakeInsightAgent(),
     )
 
 
@@ -57,6 +68,8 @@ def test_graph_runs_full_fan_out_and_populates_state():
         "regions", "employees", "customers", "products", "orders", "order_items"
     }
     assert "rag_context" in result  # empty is fine; presence proves the branch ran
+    assert result["final_report"]["answer"] == "Here is the answer."
+    assert result["final_report"]["confidence"] == 1.0
 
 
 def test_graph_skips_branches_not_required():

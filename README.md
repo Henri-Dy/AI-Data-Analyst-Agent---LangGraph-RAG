@@ -6,9 +6,11 @@ sourced answer: generated SQL, statistical analysis, charts, and insights —
 backed by a real multi-agent [LangGraph](https://github.com/langchain-ai/langgraph)
 workflow with retrieval-augmented generation (RAG) over business documentation.
 
-> **Status:** 🚧 Phase 7 of 12 complete — SQL generation, statistical
-> analysis, and chart generation all work end-to-end against real
-> infrastructure. The system is not yet exposed via API/UI; see [Roadmap](#roadmap).
+> **Status:** 🚧 Phase 8 of 12 complete — the full pipeline runs end-to-end
+> against real infrastructure: SQL generation, statistical analysis, charts,
+> a fact-checked narrative answer, and human-in-the-loop review for
+> low-confidence claims. The system is not yet exposed via API/UI; see
+> [Roadmap](#roadmap).
 
 ## Project Overview
 
@@ -251,6 +253,55 @@ SQL Executor --(requires_statistics)--> Python Analyst --> Visualization Agent -
 LLM required; the graph-integration tests confirm the chart is produced
 whenever there are SQL rows, whether or not statistics were requested.
 
+### Insight Agent, Fact Checker, and Report Generator (Phase 8)
+
+Wired in right after the Join node, so it runs regardless of which upstream
+branches fired (RAG only, SQL only, SQL + statistics, or nothing at all):
+
+```text
+Join -> Insight Agent -> Fact Checker -(confidence < threshold)-> Human Review -> Report Generator -> END
+                                       -(confidence >= threshold)-------------------> Report Generator -> END
+```
+
+- **Insight Agent** (`app/agents/insight_agent.py`) — an LLM constrained to
+  structured output (`InsightGeneration`): a short narrative answer, plus a
+  `claims` list extracting every specific number/percentage the narrative
+  states. Prompted with the Query Analyzer's intent, any RAG context, and a
+  bounded `data_context` summary (the Python Analyst's already-aggregated
+  `summary`/`table` when available — small, verified numbers — falling back
+  to a capped sample of raw SQL rows otherwise, so a 10,000-row result never
+  blows the prompt).
+- **Fact Checker** (`app/tools/fact_checker.py`) — deterministic and
+  LLM-free, like the SQL Validator, Python Analyst, and Visualization Agent:
+  an LLM checking another LLM's numbers proves nothing. It flattens every
+  numeric value out of `python_analysis` (summary + table) and the raw SQL
+  rows into a pool of "trusted values," then checks each claim's asserted
+  number against that pool (within a small relative/absolute tolerance).
+  `confidence` is the fraction of claims that verified; a narrative with no
+  numeric claims at all trivially has nothing false to report, so it
+  verifies at full confidence.
+- **Human Review** (`app/graph/nodes.py::human_review_node`) — when
+  confidence falls below `CONFIDENCE_THRESHOLD` (default 0.70), the graph
+  genuinely pauses using LangGraph's `interrupt()`/`Command(resume=...)`
+  mechanism (backed by the `MemorySaver` checkpointer already compiled into
+  the graph — see Phase 4), handing a human reviewer the narrative, its
+  confidence, and the Fact Checker's notes. Resuming with
+  `{"approved": bool, "reviewer_notes": str, "edited_narrative": str | None}`
+  lets the reviewer approve as-is or correct the narrative before the report
+  is assembled. This is a real pause/resume, not a placeholder: the graph
+  actually stops mid-execution and `graph.get_state(config).next` reports
+  it's waiting on the human-review node until resumed.
+- **Report Generator** (`app/tools/report_generator.py`) — deterministic
+  assembly only, no LLM: packages the narrative, confidence, SQL, chart,
+  fact-check notes, RAG sources, and any upstream errors into the
+  `final_report` returned to the caller.
+
+`backend/tests/test_insight_agent.py`, `test_fact_checker.py`, and
+`test_report_generator.py` unit-test each piece directly;
+`test_graph_insight_report_integration.py` exercises the full tail inside
+the compiled graph against a real Postgres instance, including a genuine
+interrupt-then-resume cycle for a deliberately unverifiable claim.
+
 ## Tech Stack
 
 **Backend:** Python 3.12+, FastAPI, LangGraph, LangChain, Pydantic, PostgreSQL,
@@ -407,7 +458,7 @@ Secrets are never hardcoded; they are read exclusively from `.env`.
 - [x] **Phase 5** — SQL generation, validation, execution
 - [x] **Phase 6** — Python Data Analyst agent
 - [x] **Phase 7** — Visualization agent
-- [ ] **Phase 8** — Fact checking and report generation
+- [x] **Phase 8** — Fact checking and report generation
 - [ ] **Phase 9** — FastAPI endpoints and streaming
 - [ ] **Phase 10** — React frontend
 - [ ] **Phase 11** — Tests and evaluation harness

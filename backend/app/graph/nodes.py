@@ -8,6 +8,9 @@ via app.graph.graph.build_default_graph().
 import json
 from dataclasses import asdict
 
+from langgraph.types import interrupt
+
+from app.agents.insight_agent import StructuredInsightAgent, generate_insight
 from app.agents.query_analyzer import StructuredQueryAnalyzer, analyze_query
 from app.agents.schema_agent import inspect_schema, schema_to_prompt_context
 from app.agents.sql_fixer import StructuredSQLGenerator as StructuredSQLFixer
@@ -15,10 +18,14 @@ from app.agents.sql_fixer import fix_sql
 from app.agents.sql_generator import StructuredSQLGenerator, generate_sql
 from app.graph.state import GraphState
 from app.rag.retriever import retrieve
+from app.tools.fact_checker import fact_check
 from app.tools.python_analyst import analyze
+from app.tools.report_generator import build_report
 from app.tools.sql_executor import execute_sql
 from app.tools.sql_validator import validate_sql
 from app.tools.visualization import visualize
+
+DATA_CONTEXT_SAMPLE_ROWS = 20
 
 
 def make_query_analyzer_node(analyzer: StructuredQueryAnalyzer):
@@ -155,6 +162,97 @@ def visualization_node(state: GraphState) -> dict:
 
 
 def join_node(state: GraphState) -> dict:
-    """Reconverges the parallel intent-router branches. A no-op today; later
-    phases will extend this into the SQL Generator entry point."""
+    """Reconverges the parallel intent-router branches (RAG / SQL+stats+chart)
+    before the Insight Agent turns whatever they produced into an answer."""
     return {}
+
+
+def _build_data_context(state: GraphState) -> str:
+    """Bounded, prompt-ready summary of whatever data the graph actually
+    computed. Prefers the Python Analyst's already-aggregated output (small,
+    verified numbers) over dumping raw SQL rows, and caps the row sample so
+    a large result set never blows the Insight Agent's context window."""
+    python_analysis = state.get("python_analysis")
+    if python_analysis and not python_analysis.get("error"):
+        parts = [f"Statistical analysis ({python_analysis['analysis_type']}):"]
+        parts.append(f"Summary: {json.dumps(python_analysis['summary'], default=str)}")
+        if python_analysis.get("table"):
+            sample = python_analysis["table"][:DATA_CONTEXT_SAMPLE_ROWS]
+            parts.append(f"Table (first {len(sample)} rows): {json.dumps(sample, default=str)}")
+        return "\n".join(parts)
+
+    sql_results = state.get("sql_results")
+    if sql_results:
+        sample = sql_results["rows"][:DATA_CONTEXT_SAMPLE_ROWS]
+        return (
+            f"SQL result: {sql_results['row_count']} row(s), columns {sql_results['columns']}.\n"
+            f"Sample rows: {json.dumps(sample, default=str)}"
+        )
+
+    return "No SQL or statistical data was retrieved for this question."
+
+
+def make_insight_agent_node(agent: StructuredInsightAgent):
+    def insight_agent_node(state: GraphState) -> dict:
+        result = generate_insight(
+            question=state["question"],
+            analysis=json.dumps(state.get("query_analysis") or {}),
+            rag_context="\n\n".join(c["content"] for c in state.get("rag_context", [])),
+            data_context=_build_data_context(state),
+            agent=agent,
+        )
+        return {
+            "insights": result.narrative,
+            "insight_claims": [c.model_dump() for c in result.claims],
+        }
+
+    return insight_agent_node
+
+
+def fact_checker_node(state: GraphState) -> dict:
+    result = fact_check(
+        claims=state.get("insight_claims", []),
+        python_analysis=state.get("python_analysis"),
+        sql_rows=(state.get("sql_results") or {}).get("rows"),
+    )
+    return {"confidence": result.confidence, "fact_check_notes": result.notes}
+
+
+def human_review_node(state: GraphState) -> dict:
+    """Pauses the graph via LangGraph's interrupt/resume mechanism when
+    confidence falls below threshold, handing a human reviewer the
+    narrative, its confidence, and the Fact Checker's notes. Resuming with
+    `Command(resume={"approved": bool, "reviewer_notes": str, "edited_narrative": str | None})`
+    lets the reviewer approve as-is or correct the narrative before the
+    Report Generator runs.
+    """
+    decision = interrupt(
+        {
+            "reason": "confidence_below_threshold",
+            "confidence": state.get("confidence"),
+            "narrative": state.get("insights"),
+            "fact_check_notes": state.get("fact_check_notes", []),
+        }
+    )
+    return {
+        "human_review": {
+            "approved": decision.get("approved", False),
+            "reviewer_notes": decision.get("reviewer_notes"),
+        },
+        "insights": decision.get("edited_narrative") or state.get("insights"),
+    }
+
+
+def report_generator_node(state: GraphState) -> dict:
+    report = build_report(
+        narrative=state.get("insights") or "",
+        confidence=state.get("confidence") if state.get("confidence") is not None else 1.0,
+        sql_query=state.get("sql_query"),
+        sql_results=state.get("sql_results"),
+        visualization=state.get("visualization"),
+        fact_check_notes=state.get("fact_check_notes", []),
+        rag_context=state.get("rag_context", []),
+        human_review=state.get("human_review"),
+        errors=state.get("errors", []),
+    )
+    return {"final_report": report}

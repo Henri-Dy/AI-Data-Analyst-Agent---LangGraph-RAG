@@ -2,8 +2,11 @@ from app.graph.routing import (
     BRANCH_JOIN,
     BRANCH_RAG,
     BRANCH_SQL,
+    HUMAN_REVIEW,
     PYTHON_ANALYST,
+    REPORT_GENERATOR,
     VISUALIZATION_AGENT,
+    route_after_fact_check,
     route_after_query_analysis,
     route_after_sql_execution,
 )
@@ -59,3 +62,20 @@ def test_route_after_sql_execution_goes_to_visualization_when_stats_not_needed()
 def test_route_after_sql_execution_skips_when_no_results():
     destination = route_after_sql_execution({"requires_statistics": True, "sql_results": None})
     assert destination == BRANCH_JOIN
+
+
+def test_route_after_fact_check_goes_to_human_review_below_threshold():
+    destination = route_after_fact_check({"confidence": 0.5}, confidence_threshold=0.70)
+    assert destination == HUMAN_REVIEW
+
+
+def test_route_after_fact_check_goes_to_report_generator_at_or_above_threshold():
+    destination = route_after_fact_check({"confidence": 0.70}, confidence_threshold=0.70)
+    assert destination == REPORT_GENERATOR
+
+
+def test_route_after_fact_check_treats_missing_confidence_as_fully_confident():
+    """No claims were made at all (nothing to fact-check) — nothing false
+    to flag, so there's no reason to interrupt for human review."""
+    destination = route_after_fact_check({"confidence": None}, confidence_threshold=0.70)
+    assert destination == REPORT_GENERATOR

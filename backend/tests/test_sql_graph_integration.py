@@ -5,6 +5,7 @@ API key is required. The real Postgres instance is used for validation
 """
 from langchain_community.embeddings import DeterministicFakeEmbedding
 
+from app.agents.insight_agent import InsightGeneration
 from app.agents.query_analyzer import QueryAnalysis
 from app.agents.sql_generator import SQLGeneration
 from app.database.models.rag_documents import EMBEDDING_DIM
@@ -40,6 +41,11 @@ class AlwaysBadFixer:
         return SQLGeneration(sql="SELECT still_bad FROM orders", reasoning="still bad")
 
 
+class FakeInsightAgent:
+    def invoke(self, prompt_input: dict) -> InsightGeneration:
+        return InsightGeneration(narrative="Here is the answer.", claims=[])
+
+
 def _build(generator, fixer, max_sql_fix_attempts=3):
     return build_graph(
         analyzer=FakeAnalyzer(),
@@ -48,6 +54,7 @@ def _build(generator, fixer, max_sql_fix_attempts=3):
         embeddings=DeterministicFakeEmbedding(size=EMBEDDING_DIM),
         sql_generator=generator,
         sql_fixer=fixer,
+        insight_agent=FakeInsightAgent(),
         max_sql_fix_attempts=max_sql_fix_attempts,
     )
 
