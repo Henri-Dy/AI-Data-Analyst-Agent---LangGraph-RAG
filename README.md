@@ -102,6 +102,36 @@ deterministic fake embedder (`backend/tests/test_rag_*.py`), so the test
 suite verifies the full store → cosine-search round trip against the real
 local Postgres/pgvector instance without requiring a paid API key.
 
+## LangGraph Workflow — current implementation status
+
+Phase 4 wires up the first stretch of the graph against real infrastructure:
+
+- **Query Analyzer** (`app/agents/query_analyzer.py`) — an LLM constrained to
+  structured output (`QueryAnalysis`: metric, period, analysis type,
+  dimensions, and which downstream capabilities are needed).
+- **Schema Agent** (`app/agents/schema_agent.py`) — inspects the *live*
+  PostgreSQL schema (tables, columns, types, foreign keys, sample values,
+  row counts) so the future SQL Generator never works from a stale
+  hardcoded description.
+- **Intent Router** — a conditional edge that fans out to whichever of RAG
+  search / SQL analysis / statistical analysis the question actually needs.
+- **RAG Search** — the real Phase 3 pgvector retriever, wired in as a graph
+  branch.
+- **Checkpointing** — the graph is compiled with `MemorySaver`, so
+  conversation state persists across invocations sharing a `thread_id`.
+
+SQL analysis and statistical analysis are placeholder nodes until Phase 5
+and Phase 6 replace them with the real SQL Generator/Validator/Executor and
+Python Data Analyst agents — the routing and state plumbing around them is
+already real and tested.
+
+Since the Query Analyzer needs an LLM call, `build_graph()` takes its
+dependencies (analyzer, DB engine, embeddings) as arguments rather than
+constructing them internally. `build_default_graph()` wires in the real
+providers from `.env`; tests (`backend/tests/test_graph_*.py`) inject a
+fake analyzer and a deterministic fake embedder, so the graph's structure,
+conditional routing, and checkpointing are verified without a paid API key.
+
 ## Tech Stack
 
 **Backend:** Python 3.12+, FastAPI, LangGraph, LangChain, Pydantic, PostgreSQL,
@@ -254,7 +284,7 @@ Secrets are never hardcoded; they are read exclusively from `.env`.
 - [x] **Phase 1** — Architecture and repository structure
 - [x] **Phase 2** — PostgreSQL + pgvector + demo dataset
 - [x] **Phase 3** — RAG pipeline
-- [ ] **Phase 4** — LangGraph state and agents
+- [x] **Phase 4** — LangGraph state and agents
 - [ ] **Phase 5** — SQL generation, validation, execution
 - [ ] **Phase 6** — Python Data Analyst agent
 - [ ] **Phase 7** — Visualization agent

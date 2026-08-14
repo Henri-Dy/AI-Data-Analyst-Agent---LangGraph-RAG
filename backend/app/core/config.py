@@ -22,6 +22,17 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     google_api_key: str | None = None
 
+    # Embeddings for RAG (Anthropic has no embeddings API, so this is
+    # independent from llm_provider and defaults to OpenAI).
+    embedding_provider: Literal["openai", "gemini"] = "openai"
+    embedding_model: str = "text-embedding-3-small"
+    embedding_dimensions: int = 1536
+
+    # RAG retrieval
+    rag_chunk_size: int = 800
+    rag_chunk_overlap: int = 100
+    rag_top_k: int = 5
+
     # Observability (optional)
     langchain_tracing_v2: bool = False
     langchain_api_key: str | None = None
