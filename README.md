@@ -120,17 +120,54 @@ Phase 4 wires up the first stretch of the graph against real infrastructure:
 - **Checkpointing** — the graph is compiled with `MemorySaver`, so
   conversation state persists across invocations sharing a `thread_id`.
 
-SQL analysis and statistical analysis are placeholder nodes until Phase 5
-and Phase 6 replace them with the real SQL Generator/Validator/Executor and
-Python Data Analyst agents — the routing and state plumbing around them is
-already real and tested.
+Statistical analysis remains a placeholder node until Phase 6 replaces it
+with the real Python Data Analyst agent.
 
 Since the Query Analyzer needs an LLM call, `build_graph()` takes its
-dependencies (analyzer, DB engine, embeddings) as arguments rather than
-constructing them internally. `build_default_graph()` wires in the real
-providers from `.env`; tests (`backend/tests/test_graph_*.py`) inject a
-fake analyzer and a deterministic fake embedder, so the graph's structure,
-conditional routing, and checkpointing are verified without a paid API key.
+dependencies (analyzer, DB engine, embeddings, SQL generator/fixer) as
+arguments rather than constructing them internally. `build_default_graph()`
+wires in the real providers from `.env`; tests (`backend/tests/test_graph_*.py`)
+inject fakes, so the graph's structure, conditional routing, and
+checkpointing are verified without a paid API key.
+
+### SQL generation, validation, and execution (Phase 5)
+
+The `sql_generator` branch is now a full retry loop, not a placeholder:
+
+```text
+SQL Generator --> SQL Validator --(invalid, retries left)--> SQL Fixer --> SQL Validator
+                        |                                                       ^
+                  (valid)|                                                      |
+                        v                                              (loops back)
+                  SQL Executor                    (invalid, retries exhausted)
+                                                            |
+                                                            v
+                                                        Give Up
+```
+
+- **SQL Generator / SQL Fixer** (`app/agents/sql_generator.py`,
+  `app/agents/sql_fixer.py`) — LLMs constrained to structured
+  `{sql, reasoning}` output, prompted with the live schema, the extracted
+  intent, and any RAG business context.
+- **SQL Validator** (`app/tools/sql_validator.py`) — deterministic, LLM-free.
+  Rejects `DROP`/`DELETE`/`UPDATE`/`INSERT`/`ALTER`/`TRUNCATE`/`CREATE`,
+  requires a single `SELECT` statement (blocking stacked-statement
+  injection), and checks every referenced table/column against the live
+  schema.
+- **SQL Executor** (`app/tools/sql_executor.py`) — runs validated SQL in a
+  `READ ONLY` transaction with a `statement_timeout` and a hard row cap
+  (defense in depth: even a query that slips past validation cannot write
+  or run away).
+- The Fixer loop retries up to `MAX_SQL_FIX_ATTEMPTS` (default 3, see
+  `.env.example`) before giving up and recording the failure instead of
+  silently dropping it.
+
+`backend/tests/test_sql_validator.py` and `test_sql_executor.py` cover the
+security properties directly (forbidden keywords, injection via stacked
+statements, unknown tables/columns, read-only enforcement, timeouts, row
+caps) against the real local database; `test_sql_graph_integration.py`
+exercises the full retry loop and give-up path inside the compiled graph
+with fake LLMs.
 
 ## Tech Stack
 
@@ -285,7 +322,7 @@ Secrets are never hardcoded; they are read exclusively from `.env`.
 - [x] **Phase 2** — PostgreSQL + pgvector + demo dataset
 - [x] **Phase 3** — RAG pipeline
 - [x] **Phase 4** — LangGraph state and agents
-- [ ] **Phase 5** — SQL generation, validation, execution
+- [x] **Phase 5** — SQL generation, validation, execution
 - [ ] **Phase 6** — Python Data Analyst agent
 - [ ] **Phase 7** — Visualization agent
 - [ ] **Phase 8** — Fact checking and report generation

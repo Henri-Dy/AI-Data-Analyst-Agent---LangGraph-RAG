@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     max_sql_rows: int = 10_000
     sql_timeout_seconds: int = 15
     max_upload_size_mb: int = 50
+    max_sql_fix_attempts: int = 3
 
     # Human-in-the-loop
     confidence_threshold: float = 0.70

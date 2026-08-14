@@ -6,6 +6,7 @@ LLM provider — only the real local Postgres/pgvector instance is used.
 from langchain_community.embeddings import DeterministicFakeEmbedding
 
 from app.agents.query_analyzer import QueryAnalysis
+from app.agents.sql_generator import SQLGeneration
 from app.database.models.rag_documents import EMBEDDING_DIM
 from app.database.session import SessionLocal, engine
 from app.graph.graph import build_graph
@@ -19,12 +20,22 @@ class FakeAnalyzer:
         return self.analysis
 
 
+class FakeSQLGenerator:
+    """Always produces valid SQL — the SQL retry loop itself is exercised
+    separately in tests/test_sql_graph_integration.py."""
+
+    def invoke(self, prompt_input: dict) -> SQLGeneration:
+        return SQLGeneration(sql="SELECT id FROM orders LIMIT 5", reasoning="fake")
+
+
 def _build_test_graph(analysis: QueryAnalysis):
     return build_graph(
         analyzer=FakeAnalyzer(analysis),
         engine=engine,
         session_factory=SessionLocal,
         embeddings=DeterministicFakeEmbedding(size=EMBEDDING_DIM),
+        sql_generator=FakeSQLGenerator(),
+        sql_fixer=FakeSQLGenerator(),
     )
 
 

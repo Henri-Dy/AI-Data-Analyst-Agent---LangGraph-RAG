@@ -22,6 +22,7 @@ class GraphState(TypedDict, total=False):
 
     # --- Schema Agent (Phase 4) ---
     schema_info: dict[str, Any] | None
+    schema_context: str
 
     # --- RAG Search (Phase 4, using the Phase 3 retriever) ---
     rag_context: list[dict[str, Any]]
@@ -31,7 +32,7 @@ class GraphState(TypedDict, total=False):
     sql_valid: bool | None
     sql_validation_errors: list[str]
     sql_fix_attempts: int
-    sql_results: list[dict[str, Any]] | None
+    sql_results: dict[str, Any] | None
 
     # --- Python Data Analyst (Phase 6) ---
     python_analysis: dict[str, Any] | None

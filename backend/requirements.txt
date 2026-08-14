@@ -25,6 +25,7 @@ sqlalchemy==2.0.36
 psycopg[binary]==3.2.3
 pgvector==0.3.6
 alembic==1.14.0
+sqlglot==30.17.0
 
 # --- Data analysis ---
 pandas==2.2.3
