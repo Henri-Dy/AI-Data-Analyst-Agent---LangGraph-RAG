@@ -1,0 +1,42 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# --- Environment secrets ---
+.env
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# --- Node / frontend ---
+node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.local
+npm-debug.log*
+
+# --- Data ---
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# --- Evaluation / reports ---
+evaluation/reports/*
+!evaluation/reports/.gitkeep
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+
+# --- LangGraph / LangSmith local cache ---
+.langgraph_api/

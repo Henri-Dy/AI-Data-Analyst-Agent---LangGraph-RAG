@@ -1,0 +1,44 @@
+# --- Web framework ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+sse-starlette==2.2.1
+
+# --- Settings & validation ---
+pydantic==2.10.4
+pydantic-settings==2.7.1
+
+# --- LangChain / LangGraph ---
+# Pinned loosely: the langchain ecosystem ships frequent inter-package
+# releases, so exact pins across all of them easily become unresolvable.
+langgraph>=0.2.60,<0.3
+langchain>=0.3.14,<0.4
+langchain-core>=0.3.29,<0.4
+langchain-community>=0.3.14,<0.4
+langchain-openai>=0.2.14,<0.3
+langchain-anthropic>=0.3.3,<0.4
+langchain-google-genai>=2.0.8,<3
+langsmith>=0.2.10,<0.3
+
+# --- Database ---
+sqlalchemy==2.0.36
+psycopg[binary]==3.2.3
+pgvector==0.3.6
+alembic==1.14.0
+
+# --- Data analysis ---
+pandas==2.2.3
+numpy==2.2.1
+scipy==1.14.1
+plotly==5.24.1
+openpyxl==3.1.5
+
+# --- Utilities ---
+python-dotenv==1.0.1
+tenacity==9.0.0
+httpx==0.28.1
+
+# --- Testing ---
+pytest==8.3.4
+pytest-asyncio==0.25.1
+pytest-cov==6.0.0
