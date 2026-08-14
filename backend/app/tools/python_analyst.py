@@ -88,9 +88,15 @@ def _group_comparison(df: pd.DataFrame, metric_col: str, dimensions: list[str]) 
         .sort_values("sum", ascending=False)
         .reset_index()
     )
+    # `.to_dict(orient="records")`, not `.iterrows()`: a mixed int/float row
+    # (group_col is int64, sum/mean are float64) gets silently upcast to a
+    # single dtype by `.iterrows()` (each row becomes a homogeneous Series),
+    # turning the group key into a numpy.float64 that LangGraph's
+    # checkpointer can't msgpack-serialize. `to_dict` preserves each
+    # column's own native Python type instead.
     table = [
-        {"group": row[group_col], "sum": float(row["sum"]), "mean": float(row["mean"]), "count": int(row["count"])}
-        for _, row in grouped.iterrows()
+        {"group": record[group_col], "sum": float(record["sum"]), "mean": float(record["mean"]), "count": int(record["count"])}
+        for record in grouped.to_dict(orient="records")
     ]
     summary = {
         "metric": metric_col,
@@ -163,9 +169,14 @@ def _anomaly_detection(df: pd.DataFrame, metric_col: str, dimensions: list[str])
         )
 
     z_scores = (series - series.mean()) / series.std()
-    anomalies = df.loc[z_scores[z_scores.abs() > ANOMALY_Z_THRESHOLD].index]
+    anomaly_index = z_scores[z_scores.abs() > ANOMALY_Z_THRESHOLD].index
+    anomalies = df.loc[anomaly_index]
 
-    table = [{**row.to_dict(), "z_score": float(z_scores[idx])} for idx, row in anomalies.iterrows()]
+    # `.to_dict(orient="records")`, not `.iterrows()` — see _group_comparison.
+    table = [
+        {**record, "z_score": float(z_scores.loc[idx])}
+        for idx, record in zip(anomaly_index, anomalies.to_dict(orient="records"), strict=True)
+    ]
     summary = {"metric": metric_col, "anomaly_count": len(table), "threshold_z_score": ANOMALY_Z_THRESHOLD}
     return PythonAnalysisResult(analysis_type="anomaly_detection", summary=summary, table=table)
 

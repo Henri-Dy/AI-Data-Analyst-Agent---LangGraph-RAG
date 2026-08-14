@@ -6,10 +6,10 @@ sourced answer: generated SQL, statistical analysis, charts, and insights —
 backed by a real multi-agent [LangGraph](https://github.com/langchain-ai/langgraph)
 workflow with retrieval-augmented generation (RAG) over business documentation.
 
-> **Status:** 🚧 Phase 9 of 12 complete — the full pipeline (SQL generation,
+> **Status:** 🚧 Phase 10 of 12 complete — the full pipeline (SQL generation,
 > statistical analysis, charts, a fact-checked narrative answer, and
-> human-in-the-loop review) is now exposed over HTTP as a streaming chat
-> API. No frontend yet; see [Roadmap](#roadmap).
+> human-in-the-loop review) is usable end to end from a real browser via the
+> React chat UI. See [Roadmap](#roadmap).
 
 ## Project Overview
 
@@ -339,12 +339,47 @@ just at the graph level.
 > reusing that cached event across tests raises "bound to a different event
 > loop". `backend/tests/conftest.py` resets it before every test.
 
+### React frontend (Phase 10)
+
+A single-page chat UI (`frontend/src/`) drives the streaming API end to end:
+
+- **`services/chatStream.ts`** — `fetch`-based SSE client (Axios doesn't
+  expose a streaming body reader in the browser), parsing `event:`/`data:`
+  frames as they arrive and handing typed `ChatEvent`s to the caller.
+- **`hooks/useChat.ts`** — one `ChatTurn` per question (its own progress
+  log, interrupt state, and report), rather than a single shared
+  conversation thread: each question gets a fresh `thread_id` so a new,
+  unrelated question never inherits stale SQL/report state left over from
+  a previous run's LangGraph checkpoint (`resume` reuses the paused turn's
+  `thread_id` instead, as it must).
+- **`components/ProgressTrail.tsx`** — live list of finished graph nodes as
+  `update` events arrive, so the user watches Query Analyzer → Schema Agent
+  → ... → Report Generator progress in real time instead of staring at a
+  spinner.
+- **`components/HumanReviewPrompt.tsx`** — renders the `interrupt` event
+  (confidence, fact-check notes, an editable narrative) and posts the
+  reviewer's Approve/Reject decision to `POST /api/chat/resume`.
+- **`components/AnswerReport.tsx`** + **`ChartView.tsx`** — renders the
+  final report: narrative, confidence/human-reviewed badges, the Plotly
+  chart, and collapsible SQL/sources/fact-check-note details. `plotly.js`
+  is a multi-MB dependency, so `ChartView` is loaded via `React.lazy` —
+  only once a report actually has a chart — instead of bloating the app's
+  initial bundle (200 KB vs. 4.7 MB gzipped-uncompressed for eagerly
+  importing Plotly).
+
+`npm run build` (`tsc -b && vite build`) and `npm run lint` (`oxlint`) both
+pass clean. The full flow (ask → stream progress → human-review interrupt →
+approve → resumed report with chart) was driven in a real headless Chrome
+against the actual FastAPI backend (LLM calls swapped for fakes, same
+pattern as the Python test suite) before considering this phase done.
+
 ## Tech Stack
 
 **Backend:** Python 3.12+, FastAPI, LangGraph, LangChain, Pydantic, PostgreSQL,
 pgvector, Pandas, NumPy, SciPy, Plotly, SQLAlchemy, pytest.
 
-**Frontend:** React, Vite, TypeScript, Tailwind CSS, Axios.
+**Frontend:** React, Vite, TypeScript, Tailwind CSS, Axios, Plotly.js
+(`react-plotly.js`, lazy-loaded).
 
 **LLM providers (configurable via `.env`):** OpenAI, Anthropic, Google Gemini.
 
@@ -497,7 +532,7 @@ Secrets are never hardcoded; they are read exclusively from `.env`.
 - [x] **Phase 7** — Visualization agent
 - [x] **Phase 8** — Fact checking and report generation
 - [x] **Phase 9** — FastAPI endpoints and streaming
-- [ ] **Phase 10** — React frontend
+- [x] **Phase 10** — React frontend
 - [ ] **Phase 11** — Tests and evaluation harness
 - [ ] **Phase 12** — Full documentation and polish
 
