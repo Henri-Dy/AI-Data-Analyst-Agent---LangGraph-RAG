@@ -25,20 +25,21 @@ from app.graph.nodes import (
     make_sql_executor_node,
     make_sql_fixer_node,
     make_sql_generator_node,
+    python_analyst_node,
     sql_give_up_node,
     sql_validator_node,
-    statistical_analysis_stub_node,
 )
 from app.graph.routing import (
     BRANCH_JOIN,
     BRANCH_RAG,
     BRANCH_SQL,
-    BRANCH_STATS,
+    PYTHON_ANALYST,
     SQL_EXECUTOR,
     SQL_FIXER,
     SQL_GIVE_UP,
     SQL_VALIDATOR,
     route_after_query_analysis,
+    route_after_sql_execution,
     route_after_sql_validation,
 )
 from app.graph.state import GraphState
@@ -68,7 +69,7 @@ def build_graph(
     workflow.add_node(SQL_FIXER, make_sql_fixer_node(sql_fixer))
     workflow.add_node(SQL_EXECUTOR, make_sql_executor_node(engine, max_sql_rows, sql_timeout_seconds))
     workflow.add_node(SQL_GIVE_UP, sql_give_up_node)
-    workflow.add_node(BRANCH_STATS, statistical_analysis_stub_node)
+    workflow.add_node(PYTHON_ANALYST, python_analyst_node)
     workflow.add_node(BRANCH_JOIN, join_node)
 
     workflow.set_entry_point("query_analyzer")
@@ -76,7 +77,7 @@ def build_graph(
     workflow.add_conditional_edges(
         "schema_agent",
         route_after_query_analysis,
-        [BRANCH_RAG, BRANCH_SQL, BRANCH_STATS, BRANCH_JOIN],
+        [BRANCH_RAG, BRANCH_SQL, BRANCH_JOIN],
     )
     workflow.add_edge(BRANCH_RAG, BRANCH_JOIN)
 
@@ -87,10 +88,12 @@ def build_graph(
         [SQL_EXECUTOR, SQL_FIXER, SQL_GIVE_UP],
     )
     workflow.add_edge(SQL_FIXER, SQL_VALIDATOR)
-    workflow.add_edge(SQL_EXECUTOR, BRANCH_JOIN)
+    workflow.add_conditional_edges(
+        SQL_EXECUTOR, route_after_sql_execution, [PYTHON_ANALYST, BRANCH_JOIN]
+    )
     workflow.add_edge(SQL_GIVE_UP, BRANCH_JOIN)
 
-    workflow.add_edge(BRANCH_STATS, BRANCH_JOIN)
+    workflow.add_edge(PYTHON_ANALYST, BRANCH_JOIN)
     workflow.add_edge(BRANCH_JOIN, END)
 
     return workflow.compile(checkpointer=MemorySaver())

@@ -15,6 +15,7 @@ from app.agents.sql_fixer import fix_sql
 from app.agents.sql_generator import StructuredSQLGenerator, generate_sql
 from app.graph.state import GraphState
 from app.rag.retriever import retrieve
+from app.tools.python_analyst import analyze
 from app.tools.sql_executor import execute_sql
 from app.tools.sql_validator import validate_sql
 
@@ -130,9 +131,15 @@ def sql_give_up_node(state: GraphState) -> dict:
     }
 
 
-def statistical_analysis_stub_node(state: GraphState) -> dict:
-    """Placeholder — the Python Data Analyst agent ships in Phase 6."""
-    return {}
+def python_analyst_node(state: GraphState) -> dict:
+    analysis = state.get("query_analysis") or {}
+    result = analyze(
+        rows=state["sql_results"]["rows"],
+        analysis_type=analysis.get("analysis_type", "descriptive"),
+        metric=analysis.get("metric"),
+        dimensions=analysis.get("dimensions"),
+    )
+    return {"python_analysis": asdict(result)}
 
 
 def join_node(state: GraphState) -> dict:
