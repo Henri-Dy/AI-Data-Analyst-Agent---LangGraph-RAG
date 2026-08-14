@@ -1,0 +1,54 @@
+[
+  {
+    "id": "total-revenue",
+    "question": "What is total revenue?",
+    "expects_sql": true
+  },
+  {
+    "id": "revenue-by-region",
+    "question": "Compare revenue across regions.",
+    "expects_sql": true
+  },
+  {
+    "id": "monthly-revenue-trend",
+    "question": "How has monthly revenue trended over the last year?",
+    "expects_sql": true
+  },
+  {
+    "id": "top-products",
+    "question": "What are the top 5 best-selling products by revenue?",
+    "expects_sql": true
+  },
+  {
+    "id": "july-revenue-decline",
+    "question": "Why did revenue decrease in July 2025?",
+    "expects_sql": true
+  },
+  {
+    "id": "order-volume-anomalies",
+    "question": "Are there any unusual spikes or drops in daily order volume?",
+    "expects_sql": true
+  },
+  {
+    "id": "discount-quantity-correlation",
+    "question": "Is there a correlation between discount percentage and order quantity?",
+    "expects_sql": true
+  },
+  {
+    "id": "clv-definition",
+    "question": "What is our definition of customer lifetime value?",
+    "expects_sql": false,
+    "expects_rag": true
+  },
+  {
+    "id": "channel-comparison",
+    "question": "How does revenue compare across online, retail, and phone sales channels?",
+    "expects_sql": true
+  },
+  {
+    "id": "off-topic",
+    "question": "What's the weather like today?",
+    "expects_sql": false,
+    "expects_rag": false
+  }
+]

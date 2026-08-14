@@ -6,10 +6,11 @@ sourced answer: generated SQL, statistical analysis, charts, and insights —
 backed by a real multi-agent [LangGraph](https://github.com/langchain-ai/langgraph)
 workflow with retrieval-augmented generation (RAG) over business documentation.
 
-> **Status:** 🚧 Phase 10 of 12 complete — the full pipeline (SQL generation,
+> **Status:** 🚧 Phase 11 of 12 complete — the full pipeline (SQL generation,
 > statistical analysis, charts, a fact-checked narrative answer, and
 > human-in-the-loop review) is usable end to end from a real browser via the
-> React chat UI. See [Roadmap](#roadmap).
+> React chat UI, with frontend tests and an end-to-end evaluation harness on
+> top of the backend's 97-test suite. See [Roadmap](#roadmap).
 
 ## Project Overview
 
@@ -373,6 +374,52 @@ approve → resumed report with chart) was driven in a real headless Chrome
 against the actual FastAPI backend (LLM calls swapped for fakes, same
 pattern as the Python test suite) before considering this phase done.
 
+### Frontend tests and evaluation harness (Phase 11)
+
+**Frontend tests** (`npm test`, Vitest + React Testing Library,
+`frontend/src/**/*.test.{ts,tsx}`) cover the pure logic that's easy to get
+subtly wrong and hard to eyeball in a browser:
+
+- `services/chatStream.test.ts` — the raw SSE frame parser (`\n` and
+  `\r\n` line endings, missing `event:`/`data:` lines).
+- `hooks/useChat.test.ts` — the `applyEvent` reducer's state transitions
+  for each event type (`update` appends to the progress trail, `interrupt`
+  pauses the turn, `done` clears any interrupt and stores the report,
+  `error` surfaces the message).
+- `components/ConfidenceBadge.test.tsx` — a small rendered-component test
+  (via `@testing-library/react`), to prove the jsdom setup itself works,
+  not just pure-function tests.
+
+`ChartView` (Plotly) and the human-review approve/reject flow are
+deliberately *not* covered here — they were verified in a real browser
+during Phase 10 instead, since Plotly's rendering and the actual SSE
+round-trip are exactly the kind of thing that passes a mocked unit test
+while being broken in practice (see the numpy/msgpack bug in Phase 10).
+
+**Evaluation harness** (`evaluation/`) runs a fixed set of ten
+representative business questions (`questions.json` — one per
+`analysis_type`, a RAG-only question, and an off-topic control) through the
+*real* compiled graph end to end, and scores each one on pipeline
+consistency: did SQL get generated when expected, did it execute
+successfully, did the report carry unexpected errors, did it need human
+review. This isn't a correctness eval of the narrative's content — the
+graph's own Fact Checker already verifies that before any report ships —
+it's a regression check that a prompt or logic change to any agent didn't
+break the pipeline's basic behavior on a realistic spread of questions.
+
+```bash
+cd backend  # so Settings picks up backend/.env, same as any script/ entry point
+python ../evaluation/evaluate.py
+```
+
+Writes a timestamped JSON report to `evaluation/reports/` (gitignored) and
+prints a pass/fail summary. `evaluation/test_evaluate.py` unit-tests the
+scoring and report-writing logic against a fake graph (same pattern as the
+backend test suite), so the harness itself is verified without a paid LLM
+call; run it the same way as `evaluate.py` (`cd backend && pytest
+../evaluation/test_evaluate.py`), since it also needs `backend/.env` on
+the working directory to reach the real local Postgres instance.
+
 ## Tech Stack
 
 **Backend:** Python 3.12+, FastAPI, LangGraph, LangChain, Pydantic, PostgreSQL,
@@ -506,6 +553,8 @@ npm run dev
 
 Open the printed local URL (default `http://localhost:5173`).
 
+Run tests: `npm test`. Build (also type-checks): `npm run build`.
+
 ## Configuration (`.env`)
 
 See [`.env.example`](.env.example) for the full list. Key variables:
@@ -533,7 +582,7 @@ Secrets are never hardcoded; they are read exclusively from `.env`.
 - [x] **Phase 8** — Fact checking and report generation
 - [x] **Phase 9** — FastAPI endpoints and streaming
 - [x] **Phase 10** — React frontend
-- [ ] **Phase 11** — Tests and evaluation harness
+- [x] **Phase 11** — Tests and evaluation harness
 - [ ] **Phase 12** — Full documentation and polish
 
 ## Security

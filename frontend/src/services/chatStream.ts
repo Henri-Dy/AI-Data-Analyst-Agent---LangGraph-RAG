@@ -44,7 +44,7 @@ async function streamSSE(
   }
 }
 
-function parseFrame(frame: string): ChatEvent | null {
+export function parseFrame(frame: string): ChatEvent | null {
   let eventType: string | null = null;
   let data: string | null = null;
 

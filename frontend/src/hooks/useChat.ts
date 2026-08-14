@@ -14,7 +14,7 @@ export interface ChatTurn {
   error: string | null;
 }
 
-function applyEvent(turn: ChatTurn, event: ChatEvent): ChatTurn {
+export function applyEvent(turn: ChatTurn, event: ChatEvent): ChatTurn {
   switch (event.event) {
     case "update":
       return { ...turn, progress: [...turn.progress, event.data.node] };
