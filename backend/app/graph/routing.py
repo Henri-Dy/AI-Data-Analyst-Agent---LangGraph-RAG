@@ -10,6 +10,7 @@ SQL_FIXER = "sql_fixer"
 SQL_EXECUTOR = "sql_executor"
 SQL_GIVE_UP = "sql_give_up"
 PYTHON_ANALYST = "python_analyst"
+VISUALIZATION_AGENT = "visualization_agent"
 
 
 def route_after_query_analysis(state: GraphState) -> list[str]:
@@ -39,8 +40,13 @@ def route_after_sql_validation(state: GraphState, max_fix_attempts: int) -> str:
 
 
 def route_after_sql_execution(state: GraphState) -> str:
-    """Runs the Python Data Analyst only when the question actually needs
-    statistics and the SQL Executor produced rows to analyze."""
-    if state.get("requires_statistics") and state.get("sql_results"):
+    """Routes SQL results to the Python Data Analyst when statistics were
+    requested (it hands off to the Visualization Agent itself once done —
+    see `graph.py`), or straight to the Visualization Agent otherwise: a
+    chart is worth producing for any successful SQL question, not just
+    statistical ones. No rows at all means nothing to show; skip to join."""
+    if not state.get("sql_results"):
+        return BRANCH_JOIN
+    if state.get("requires_statistics"):
         return PYTHON_ANALYST
-    return BRANCH_JOIN
+    return VISUALIZATION_AGENT

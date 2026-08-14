@@ -18,6 +18,7 @@ from app.rag.retriever import retrieve
 from app.tools.python_analyst import analyze
 from app.tools.sql_executor import execute_sql
 from app.tools.sql_validator import validate_sql
+from app.tools.visualization import visualize
 
 
 def make_query_analyzer_node(analyzer: StructuredQueryAnalyzer):
@@ -140,6 +141,17 @@ def python_analyst_node(state: GraphState) -> dict:
         dimensions=analysis.get("dimensions"),
     )
     return {"python_analysis": asdict(result)}
+
+
+def visualization_node(state: GraphState) -> dict:
+    analysis = state.get("query_analysis") or {}
+    result = visualize(
+        rows=state["sql_results"]["rows"],
+        analysis_type=analysis.get("analysis_type", "descriptive"),
+        metric=analysis.get("metric"),
+        dimensions=analysis.get("dimensions"),
+    )
+    return {"visualization": asdict(result)}
 
 
 def join_node(state: GraphState) -> dict:

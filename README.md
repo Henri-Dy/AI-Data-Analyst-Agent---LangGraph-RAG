@@ -6,9 +6,9 @@ sourced answer: generated SQL, statistical analysis, charts, and insights —
 backed by a real multi-agent [LangGraph](https://github.com/langchain-ai/langgraph)
 workflow with retrieval-augmented generation (RAG) over business documentation.
 
-> **Status:** 🚧 Phase 6 of 12 complete — SQL generation and statistical
-> analysis both work end-to-end against real infrastructure. The system is
-> not yet exposed via API/UI; see [Roadmap](#roadmap).
+> **Status:** 🚧 Phase 7 of 12 complete — SQL generation, statistical
+> analysis, and chart generation all work end-to-end against real
+> infrastructure. The system is not yet exposed via API/UI; see [Roadmap](#roadmap).
 
 ## Project Overview
 
@@ -121,8 +121,9 @@ Phase 4 wires up the first stretch of the graph against real infrastructure:
 - **Checkpointing** — the graph is compiled with `MemorySaver`, so
   conversation state persists across invocations sharing a `thread_id`.
 
-Statistical analysis remains a placeholder node until Phase 6 replaces it
-with the real Python Data Analyst agent.
+Statistical analysis and chart generation are wired in as of Phase 6/7 —
+see [Python Data Analyst (Phase 6)](#python-data-analyst-phase-6) and
+[Visualization Agent (Phase 7)](#visualization-agent-phase-7) below.
 
 Since the Query Analyzer needs an LLM call, `build_graph()` takes its
 dependencies (analyzer, DB engine, embeddings, SQL generator/fixer) as
@@ -203,15 +204,52 @@ SQL Executor --(requires_statistics and rows exist)--> Python Analyst --> Join
   numeric detection — `python_analyst.py` coerces those columns first so
   money/quantity metrics are actually picked up.
 - Every handler raises a typed `_AnalysisError` for expected failure modes
-  (no numeric column, no dimension to group by, a flat series with zero
-  variance, ...), which `analyze()` turns into `PythonAnalysisResult.error`
-  instead of crashing the graph.
+  (no dimension to group by, a flat series with zero variance, ...), which
+  `analyze()` turns into `PythonAnalysisResult.error` instead of crashing
+  the graph; a missing numeric column is caught even earlier, before any
+  handler runs.
+- The Decimal-coercion and metric/time-column resolution helpers live in
+  `app/tools/tabular.py`, shared with the Visualization Agent below so both
+  tools treat the same SQL row shape identically.
 
 `backend/tests/test_python_analyst.py` unit-tests every analysis type
 directly (including the Decimal-coercion behavior) with no DB or LLM
 required; `test_graph_python_analyst_integration.py` and the updated
 `test_graph_routing.py` verify the node only runs when statistics are
 needed and SQL rows exist, inside the compiled graph.
+
+### Visualization Agent (Phase 7)
+
+Also deterministic and LLM-free, and deliberately independent from the
+Python Data Analyst: it reads the same raw SQL rows directly, so a chart is
+still produced for a plain SQL question that never asked for statistics.
+Wired in right after the SQL Executor:
+
+```text
+SQL Executor --(requires_statistics)--> Python Analyst --> Visualization Agent --> Join
+             --(otherwise, rows exist)-------------------> Visualization Agent --> Join
+             --(no rows)---------------------------------------------------------> Join
+```
+
+- **Visualization Agent** (`app/tools/visualization.py`) — picks a Plotly
+  chart type from the Query Analyzer's `analysis_type` and the shape of the
+  result set, and returns the figure as a plain JSON-serializable dict
+  (`json.loads(plotly.io.to_json(fig))`, so no numpy/pandas types leak into
+  graph state):
+  - `trend` → line chart over the detected date/period column.
+  - `comparison` / `ranking` / `root_cause` → bar chart grouped by the first
+    dimension; a **second** dimension switches automatically to a stacked
+    bar chart (pivoted, one trace per subgroup).
+  - `correlation` → a correlation-matrix heatmap across all numeric columns.
+  - `anomaly_detection` → a scatter plot with outlier points (|z-score| > 2.5)
+    highlighted in a different color.
+  - `descriptive`, or any unrecognized `analysis_type` → a histogram of the
+    metric's distribution, or a bar chart if a dimension is available.
+
+`backend/tests/test_visualization.py` unit-tests every chart type directly
+(including the stacked-bar and anomaly-highlighting behavior) with no DB or
+LLM required; the graph-integration tests confirm the chart is produced
+whenever there are SQL rows, whether or not statistics were requested.
 
 ## Tech Stack
 
@@ -368,7 +406,7 @@ Secrets are never hardcoded; they are read exclusively from `.env`.
 - [x] **Phase 4** — LangGraph state and agents
 - [x] **Phase 5** — SQL generation, validation, execution
 - [x] **Phase 6** — Python Data Analyst agent
-- [ ] **Phase 7** — Visualization agent
+- [x] **Phase 7** — Visualization agent
 - [ ] **Phase 8** — Fact checking and report generation
 - [ ] **Phase 9** — FastAPI endpoints and streaming
 - [ ] **Phase 10** — React frontend

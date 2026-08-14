@@ -3,6 +3,7 @@ from app.graph.routing import (
     BRANCH_RAG,
     BRANCH_SQL,
     PYTHON_ANALYST,
+    VISUALIZATION_AGENT,
     route_after_query_analysis,
     route_after_sql_execution,
 )
@@ -46,11 +47,13 @@ def test_route_after_sql_execution_runs_python_analyst_when_needed():
     assert destination == PYTHON_ANALYST
 
 
-def test_route_after_sql_execution_skips_when_stats_not_needed():
+def test_route_after_sql_execution_goes_to_visualization_when_stats_not_needed():
+    """A chart is worth producing for any successful SQL question, not just
+    statistical ones, so this skips the Python Analyst but not the chart."""
     destination = route_after_sql_execution(
         {"requires_statistics": False, "sql_results": {"rows": [{"id": 1}], "row_count": 1}}
     )
-    assert destination == BRANCH_JOIN
+    assert destination == VISUALIZATION_AGENT
 
 
 def test_route_after_sql_execution_skips_when_no_results():

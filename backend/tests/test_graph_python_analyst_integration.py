@@ -1,8 +1,9 @@
-"""Exercises the Python Data Analyst wired into the compiled graph: it must
-run after a successful SQL execution when `requires_statistics` is set, and
-must not run otherwise (no data, or not needed). Uses fake LLMs so no real
-API key is required; the real Postgres instance provides schema lookups
-and SQL execution.
+"""Exercises the Python Data Analyst and Visualization Agent wired into the
+compiled graph: the analyst runs after a successful SQL execution only when
+`requires_statistics` is set, while the Visualization Agent always runs
+afterwards as long as there are rows to chart. Uses fake LLMs so no real API
+key is required; the real Postgres instance provides schema lookups and SQL
+execution.
 """
 from langchain_community.embeddings import DeterministicFakeEmbedding
 
@@ -55,6 +56,7 @@ def test_python_analyst_runs_after_sql_execution_when_statistics_required():
     assert result["python_analysis"] is not None
     assert result["python_analysis"]["error"] is None
     assert result["python_analysis"]["summary"]["count"] == 20
+    assert result["visualization"]["chart_type"] == "histogram"
 
 
 def test_python_analyst_skipped_when_statistics_not_required():
@@ -70,6 +72,9 @@ def test_python_analyst_skipped_when_statistics_not_required():
 
     assert result["sql_results"]["row_count"] == 5
     assert result.get("python_analysis") is None
+    # Statistics weren't requested, but a chart is still worth producing
+    # for a successful SQL question.
+    assert result["visualization"]["error"] is None
 
 
 def test_requires_statistics_alone_pulls_in_sql_branch_and_runs_analyst():

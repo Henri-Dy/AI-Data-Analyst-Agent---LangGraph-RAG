@@ -14,6 +14,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats as scipy_stats
 
+from app.tools.tabular import coerce_numeric_columns, find_time_column, resolve_metric_column
+
 ANOMALY_Z_THRESHOLD = 2.5
 
 
@@ -39,48 +41,25 @@ def analyze(
     if not rows:
         return PythonAnalysisResult(analysis_type=analysis_type, error="No rows to analyze.")
 
-    df = _coerce_numeric_columns(pd.DataFrame(rows))
+    df = coerce_numeric_columns(pd.DataFrame(rows))
     dimensions = [d for d in (dimensions or []) if d in df.columns]
     handler = _HANDLERS.get(analysis_type, _descriptive)
 
+    metric_col = resolve_metric_column(df, metric)
+    if metric_col is None:
+        return PythonAnalysisResult(
+            analysis_type=analysis_type, error="The query result has no numeric column to analyze."
+        )
+
     try:
-        metric_col = _resolve_metric_column(df, metric)
         return handler(df, metric_col, dimensions)
     except _AnalysisError as e:
         return PythonAnalysisResult(analysis_type=analysis_type, error=str(e))
 
 
 class _AnalysisError(Exception):
-    """Raised for expected failure modes (no numeric column, no group column,
+    """Raised for expected failure modes (no group column, a flat series,
     ...) and turned into `PythonAnalysisResult.error` by `analyze()`."""
-
-
-def _coerce_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """SQLAlchemy/psycopg return PostgreSQL NUMERIC columns as `Decimal`,
-    which pandas stores as dtype `object` — invisible to
-    `select_dtypes(include="number")`. Convert any object column that
-    converts to numeric losslessly (every non-null value parses), so
-    money/quantity columns are recognized as metrics."""
-    for col in df.columns:
-        if df[col].dtype != object:
-            continue
-        converted = pd.to_numeric(df[col], errors="coerce")
-        if converted.notna().sum() == df[col].notna().sum():
-            df[col] = converted
-    return df
-
-
-def _resolve_metric_column(df: pd.DataFrame, metric: str | None) -> str:
-    numeric_cols = list(df.select_dtypes(include="number").columns)
-    if not numeric_cols:
-        raise _AnalysisError("The query result has no numeric column to analyze.")
-
-    if metric:
-        for col in df.columns:
-            if metric.lower().replace(" ", "_") in col.lower():
-                if col in numeric_cols:
-                    return col
-    return numeric_cols[0]
 
 
 def _descriptive(df: pd.DataFrame, metric_col: str, dimensions: list[str]) -> PythonAnalysisResult:
@@ -123,7 +102,7 @@ def _group_comparison(df: pd.DataFrame, metric_col: str, dimensions: list[str]) 
 
 
 def _trend(df: pd.DataFrame, metric_col: str, dimensions: list[str]) -> PythonAnalysisResult:
-    time_col = _find_time_column(df)
+    time_col = find_time_column(df)
     if time_col is None:
         raise _AnalysisError("Trend analysis requires a date/period column in the result set.")
 
@@ -212,16 +191,6 @@ def _contribution_analysis(df: pd.DataFrame, metric_col: str, dimensions: list[s
         "top_contributor_share_pct": table[0]["share_pct"] if table else None,
     }
     return PythonAnalysisResult(analysis_type="root_cause", summary=summary, table=table)
-
-
-def _find_time_column(df: pd.DataFrame) -> str | None:
-    for col in df.columns:
-        if pd.api.types.is_datetime64_any_dtype(df[col]):
-            return col
-    for col in df.columns:
-        if any(hint in col.lower() for hint in ("date", "month", "period", "day", "year", "time")):
-            return col
-    return None
 
 
 _HANDLERS = {

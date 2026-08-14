@@ -3,9 +3,9 @@
 Query Analyzer -> Schema Agent -> Intent Router (conditional fan-out) ->
   - RAG Search (real, Phase 3 retriever)
   - SQL Generator -> Validator -> (invalid, retries left) -> Fixer -> Validator
-                             -> (valid) -> Executor
+                             -> (valid) -> Executor -> (requires_statistics) -> Python Analyst -> Visualization Agent
+                                                     -> (otherwise, rows exist) -> Visualization Agent
                              -> (invalid, retries exhausted) -> Give Up
-  - Statistical Analysis (placeholder until Phase 6)
 -> Join -> END
 """
 from functools import partial
@@ -28,6 +28,7 @@ from app.graph.nodes import (
     python_analyst_node,
     sql_give_up_node,
     sql_validator_node,
+    visualization_node,
 )
 from app.graph.routing import (
     BRANCH_JOIN,
@@ -38,6 +39,7 @@ from app.graph.routing import (
     SQL_FIXER,
     SQL_GIVE_UP,
     SQL_VALIDATOR,
+    VISUALIZATION_AGENT,
     route_after_query_analysis,
     route_after_sql_execution,
     route_after_sql_validation,
@@ -70,6 +72,7 @@ def build_graph(
     workflow.add_node(SQL_EXECUTOR, make_sql_executor_node(engine, max_sql_rows, sql_timeout_seconds))
     workflow.add_node(SQL_GIVE_UP, sql_give_up_node)
     workflow.add_node(PYTHON_ANALYST, python_analyst_node)
+    workflow.add_node(VISUALIZATION_AGENT, visualization_node)
     workflow.add_node(BRANCH_JOIN, join_node)
 
     workflow.set_entry_point("query_analyzer")
@@ -89,11 +92,12 @@ def build_graph(
     )
     workflow.add_edge(SQL_FIXER, SQL_VALIDATOR)
     workflow.add_conditional_edges(
-        SQL_EXECUTOR, route_after_sql_execution, [PYTHON_ANALYST, BRANCH_JOIN]
+        SQL_EXECUTOR, route_after_sql_execution, [PYTHON_ANALYST, VISUALIZATION_AGENT, BRANCH_JOIN]
     )
     workflow.add_edge(SQL_GIVE_UP, BRANCH_JOIN)
 
-    workflow.add_edge(PYTHON_ANALYST, BRANCH_JOIN)
+    workflow.add_edge(PYTHON_ANALYST, VISUALIZATION_AGENT)
+    workflow.add_edge(VISUALIZATION_AGENT, BRANCH_JOIN)
     workflow.add_edge(BRANCH_JOIN, END)
 
     return workflow.compile(checkpointer=MemorySaver())
