@@ -6,11 +6,10 @@ sourced answer: generated SQL, statistical analysis, charts, and insights —
 backed by a real multi-agent [LangGraph](https://github.com/langchain-ai/langgraph)
 workflow with retrieval-augmented generation (RAG) over business documentation.
 
-> **Status:** 🚧 Phase 8 of 12 complete — the full pipeline runs end-to-end
-> against real infrastructure: SQL generation, statistical analysis, charts,
-> a fact-checked narrative answer, and human-in-the-loop review for
-> low-confidence claims. The system is not yet exposed via API/UI; see
-> [Roadmap](#roadmap).
+> **Status:** 🚧 Phase 9 of 12 complete — the full pipeline (SQL generation,
+> statistical analysis, charts, a fact-checked narrative answer, and
+> human-in-the-loop review) is now exposed over HTTP as a streaming chat
+> API. No frontend yet; see [Roadmap](#roadmap).
 
 ## Project Overview
 
@@ -302,6 +301,44 @@ Join -> Insight Agent -> Fact Checker -(confidence < threshold)-> Human Review -
 the compiled graph against a real Postgres instance, including a genuine
 interrupt-then-resume cycle for a deliberately unverifiable claim.
 
+### FastAPI endpoints and streaming (Phase 9)
+
+The graph is exposed over HTTP as Server-Sent Events, so a client sees each
+agent finish in real time instead of waiting for the whole pipeline:
+
+- `POST /api/chat` (`app/api/chat.py`) — body `{"question": str, "thread_id": str | None}`.
+  Starts a new conversation (`thread_id` auto-generated if omitted) or
+  continues an existing one, and streams:
+  - an `update` event per graph node as it finishes (`{node, output}`),
+  - an `interrupt` event instead, if the Fact Checker's confidence falls
+    below `CONFIDENCE_THRESHOLD` and the graph pauses for human review,
+  - a final `done` event carrying the `final_report`.
+- `POST /api/chat/resume` — body
+  `{"thread_id": str, "approved": bool, "reviewer_notes": str | None, "edited_narrative": str | None}`.
+  Resumes a conversation paused on an `interrupt` event with the reviewer's
+  decision, via LangGraph's `Command(resume=...)`, and streams the rest of
+  the run the same way.
+- **`app/services/chat_service.py`** — the graph's nodes are synchronous
+  (LLM calls, DB queries), so `graph.stream()` is a blocking generator;
+  `stream_graph_events()` runs it in a worker thread and bridges each item
+  back onto the event loop through an `asyncio.Queue`, so one slow LangGraph
+  run never blocks other requests the server is handling concurrently. The
+  production graph itself (`get_graph()`) is built once, lazily, on the
+  first chat request — not at import time — so the app still starts and
+  serves `/api/health` without an LLM API key configured.
+
+`backend/tests/test_chat_api.py` drives both endpoints through FastAPI's
+`TestClient` against a fake graph (dependency-injected via
+`app.dependency_overrides`), asserting on the actual parsed SSE event
+stream — including a real interrupt-then-resume round trip over HTTP, not
+just at the graph level.
+
+> **Note:** `sse-starlette` caches its shutdown-signal `anyio.Event` on a
+> class attribute the first time an SSE response runs, bound to whichever
+> event loop created it; since every `TestClient` spins up its own loop,
+> reusing that cached event across tests raises "bound to a different event
+> loop". `backend/tests/conftest.py` resets it before every test.
+
 ## Tech Stack
 
 **Backend:** Python 3.12+, FastAPI, LangGraph, LangChain, Pydantic, PostgreSQL,
@@ -459,7 +496,7 @@ Secrets are never hardcoded; they are read exclusively from `.env`.
 - [x] **Phase 6** — Python Data Analyst agent
 - [x] **Phase 7** — Visualization agent
 - [x] **Phase 8** — Fact checking and report generation
-- [ ] **Phase 9** — FastAPI endpoints and streaming
+- [x] **Phase 9** — FastAPI endpoints and streaming
 - [ ] **Phase 10** — React frontend
 - [ ] **Phase 11** — Tests and evaluation harness
 - [ ] **Phase 12** — Full documentation and polish
