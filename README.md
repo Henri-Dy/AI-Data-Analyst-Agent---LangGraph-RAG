@@ -6,11 +6,13 @@ sourced answer: generated SQL, statistical analysis, charts, and insights —
 backed by a real multi-agent [LangGraph](https://github.com/langchain-ai/langgraph)
 workflow with retrieval-augmented generation (RAG) over business documentation.
 
-> **Status:** 🚧 Phase 11 of 12 complete — the full pipeline (SQL generation,
+> **Status:** ✅ All 12 phases complete. The full pipeline — SQL generation,
 > statistical analysis, charts, a fact-checked narrative answer, and
-> human-in-the-loop review) is usable end to end from a real browser via the
-> React chat UI, with frontend tests and an end-to-end evaluation harness on
-> top of the backend's 97-test suite. See [Roadmap](#roadmap).
+> human-in-the-loop review — is usable end to end from a real browser via
+> the React chat UI, backed by a 97-test backend suite, a frontend test
+> suite, and an end-to-end evaluation harness. See [Roadmap](#roadmap) for
+> the phase-by-phase history and the sections below for how each piece
+> actually works.
 
 ## Project Overview
 
@@ -33,7 +35,60 @@ conditionally-routed, retryable LangGraph application with memory and
 human-in-the-loop review, exposed through a FastAPI backend and a React
 frontend.
 
-## Planned LangGraph Workflow
+## Screenshots
+
+The chat UI streaming a question through the graph, pausing for human
+review when the Fact Checker's confidence is low enough to warrant it
+(here, deliberately, on a claim seeded not to match any computed number):
+
+![Human review prompt: a low-confidence narrative awaiting approval, with the live progress trail and fact-check notes above it](docs/human-review.png)
+
+...and the resulting report after approval — narrative, confidence and
+human-reviewed badges, and the auto-selected Plotly chart:
+
+![Final report: narrative answer, confidence/human-reviewed badges, and a bar chart of revenue by region](docs/final-report.png)
+
+## Implemented LangGraph Workflow
+
+The graph actually compiled by `backend/app/graph/graph.py` — see
+[LangGraph Workflow — current implementation status](#langgraph-workflow--current-implementation-status)
+below for how and why this diverges from the original design sketch that
+follows it:
+
+```mermaid
+flowchart TD
+    U[User Question] --> QA[Query Analyzer]
+    QA --> SA[Schema Agent]
+    SA -->|requires_rag| RAG[RAG Search]
+    SA -->|requires_sql or requires_statistics| GEN[SQL Generator]
+    SA -->|nothing needed| JOIN[Join]
+    RAG --> JOIN
+    GEN --> VAL[SQL Validator]
+    VAL -->|invalid, retries left| FIX[SQL Fixer]
+    FIX --> VAL
+    VAL -->|invalid, retries exhausted| GIVEUP[Give Up]
+    VAL -->|valid| EXEC[SQL Executor]
+    GIVEUP --> JOIN
+    EXEC -->|requires_statistics| PY[Python Analyst]
+    EXEC -->|otherwise, rows exist| VIZ[Visualization Agent]
+    EXEC -->|no rows| JOIN
+    PY --> VIZ
+    VIZ --> JOIN
+    JOIN --> INS[Insight Agent]
+    INS --> FC[Fact Checker]
+    FC -->|confidence < threshold| HITL[Human Review]
+    FC -->|confidence >= threshold| RPT[Report Generator]
+    HITL --> RPT
+    RPT --> END[Final Report]
+```
+
+## Original Design Sketch
+
+The plan `Phase 1` scaffolding started from, kept here for contrast with
+what actually shipped above — the biggest divergence is that statistics and
+charts turned out to need the SQL Executor's actual rows, not just the
+Intent Router's signal, so they moved from a parallel branch to a stage
+after execution (see [Python Data Analyst (Phase 6)](#python-data-analyst-phase-6)):
 
 ```mermaid
 flowchart TD
@@ -583,15 +638,21 @@ Secrets are never hardcoded; they are read exclusively from `.env`.
 - [x] **Phase 9** — FastAPI endpoints and streaming
 - [x] **Phase 10** — React frontend
 - [x] **Phase 11** — Tests and evaluation harness
-- [ ] **Phase 12** — Full documentation and polish
+- [x] **Phase 12** — Full documentation and polish
 
 ## Security
 
 - Read-only SQL execution: `DROP`, `DELETE`, `UPDATE`, `INSERT`, `ALTER`,
-  `TRUNCATE`, `CREATE` are rejected by the SQL Validator.
-- Row limits and query timeouts on every SQL execution.
-- File upload size/type validation.
+  `TRUNCATE`, `CREATE` are rejected by the SQL Validator (`app/tools/sql_validator.py`),
+  and independently enforced again at execution time via a `READ ONLY`
+  transaction (`app/tools/sql_executor.py`) — defense in depth, since
+  validated SQL from an LLM is still untrusted input.
+- Row limits (`MAX_SQL_ROWS`) and query timeouts (`SQL_TIMEOUT_SECONDS`) on
+  every SQL execution.
 - All secrets loaded from `.env`, never hardcoded.
+- No file upload endpoint exists yet (`MAX_UPLOAD_SIZE_MB` is a setting
+  reserved for one, unused so far) — the demo dataset is loaded via
+  `backend/scripts/seed_database.py`, not through the API.
 
 ## License
 
