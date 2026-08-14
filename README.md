@@ -150,12 +150,11 @@ Install PostgreSQL locally (e.g. `sudo apt install postgresql`), then enable
 pgvector for your database:
 
 ```sql
-CREATE DATABASE ai_data_analyst;
+CREATE ROLE ai_data_analyst WITH LOGIN PASSWORD 'change-me';
+CREATE DATABASE ai_data_analyst OWNER ai_data_analyst;
 \c ai_data_analyst
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
-
-> Full setup, seed data, and schema migrations are added in Phase 2.
 
 ### 2. Backend
 
@@ -172,6 +171,12 @@ pip install -r requirements.txt
 cp ../.env.example .env   # then fill in DATABASE_URL and your LLM API key
 ```
 
+Apply the database schema:
+
+```bash
+alembic upgrade head
+```
+
 Run it:
 
 ```bash
@@ -185,6 +190,21 @@ Run tests:
 ```bash
 pytest
 ```
+
+### 2b. Demo dataset
+
+Generates a realistic dataset (56k orders, 1,500 customers, 130 products,
+seasonality, regional differences, anomalies, a genuine revenue-decline
+story in the most recent month, and a few realistic missing values) and
+loads it into PostgreSQL:
+
+```bash
+python data/generate_dataset.py        # writes CSVs to data/raw/
+cd backend && python scripts/seed_database.py
+```
+
+Re-running `seed_database.py` truncates and reloads all tables, so it is
+safe to run again after regenerating the CSVs.
 
 ### 3. Frontend
 
@@ -214,7 +234,7 @@ Secrets are never hardcoded; they are read exclusively from `.env`.
 ## Roadmap
 
 - [x] **Phase 1** — Architecture and repository structure
-- [ ] **Phase 2** — PostgreSQL + pgvector + demo dataset
+- [x] **Phase 2** — PostgreSQL + pgvector + demo dataset
 - [ ] **Phase 3** — RAG pipeline
 - [ ] **Phase 4** — LangGraph state and agents
 - [ ] **Phase 5** — SQL generation, validation, execution
