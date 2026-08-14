@@ -84,6 +84,24 @@ financial definitions, sales docs, regional info, policies)
 RAG supplies **business context for interpretation**; it never replaces SQL
 for querying tabular data.
 
+14 business documents ship under [`data/business_docs/`](data/business_docs)
+across seven categories: glossary, KPI definitions, product documentation,
+financial definitions, sales documentation, regional information, and
+company policies.
+
+Ingest them (requires `OPENAI_API_KEY`, or `GOOGLE_API_KEY` if
+`EMBEDDING_PROVIDER=gemini`):
+
+```bash
+cd backend
+python scripts/ingest_documents.py
+```
+
+The loader, chunker, and pgvector retriever are covered by tests that use a
+deterministic fake embedder (`backend/tests/test_rag_*.py`), so the test
+suite verifies the full store → cosine-search round trip against the real
+local Postgres/pgvector instance without requiring a paid API key.
+
 ## Tech Stack
 
 **Backend:** Python 3.12+, FastAPI, LangGraph, LangChain, Pydantic, PostgreSQL,
@@ -235,7 +253,7 @@ Secrets are never hardcoded; they are read exclusively from `.env`.
 
 - [x] **Phase 1** — Architecture and repository structure
 - [x] **Phase 2** — PostgreSQL + pgvector + demo dataset
-- [ ] **Phase 3** — RAG pipeline
+- [x] **Phase 3** — RAG pipeline
 - [ ] **Phase 4** — LangGraph state and agents
 - [ ] **Phase 5** — SQL generation, validation, execution
 - [ ] **Phase 6** — Python Data Analyst agent
