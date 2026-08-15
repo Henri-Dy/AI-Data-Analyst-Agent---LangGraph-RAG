@@ -66,3 +66,30 @@ export interface ReviewDecision {
   reviewer_notes: string | null;
   edited_narrative: string | null;
 }
+
+export interface DocumentSummary {
+  document_id: string;
+  title: string;
+  category: string;
+  chunk_count: number;
+  created_at: string;
+}
+
+export interface DocumentUploadResponse {
+  document_id: string;
+  chunks_created: number;
+}
+
+export interface DatasetSummary {
+  table_name: string;
+  original_filename: string;
+  row_count: number;
+  columns: string[];
+  created_at: string;
+}
+
+export interface DatasetUploadResponse {
+  table_name: string;
+  row_count: number;
+  columns: string[];
+}

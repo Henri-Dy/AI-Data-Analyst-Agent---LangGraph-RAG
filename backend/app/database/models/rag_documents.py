@@ -1,8 +1,10 @@
 import datetime
+import uuid
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import DateTime, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -20,6 +22,12 @@ class RagDocument(Base):
     __tablename__ = "rag_documents"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    # Groups every chunk of one source document so it can be listed/deleted
+    # as a unit. Nullable for backward compatibility with rows ingested
+    # before this column existed (see the follow-up in the migration).
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True), default=uuid.uuid4, nullable=True, index=True
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     category: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)

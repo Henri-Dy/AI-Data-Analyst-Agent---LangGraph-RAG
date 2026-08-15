@@ -8,7 +8,7 @@ from sqlalchemy.engine import Engine
 
 # Internal/system tables that are not part of the business schema exposed
 # to the SQL Generator.
-EXCLUDED_TABLES = {"alembic_version", "rag_documents"}
+EXCLUDED_TABLES = {"alembic_version", "rag_documents", "uploaded_datasets"}
 
 SAMPLE_VALUES_LIMIT = 5
 
