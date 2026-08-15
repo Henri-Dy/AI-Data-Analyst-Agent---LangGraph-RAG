@@ -29,7 +29,7 @@ def get_chat_model(settings: Settings | None = None, temperature: float = 0.0) -
         from langchain_google_genai import ChatGoogleGenerativeAI
 
         return ChatGoogleGenerativeAI(
-            model="gemini-1.5-pro", google_api_key=settings.google_api_key, temperature=temperature
+            model="gemini-2.5-flash", google_api_key=settings.google_api_key, temperature=temperature
         )
 
     raise ValueError(f"Unsupported LLM provider: {settings.llm_provider}")

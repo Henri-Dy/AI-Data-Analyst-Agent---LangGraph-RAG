@@ -8,9 +8,10 @@ from sqlalchemy.sql import func
 
 from app.database.session import Base
 
-# Matches OpenAI's text-embedding-3-small dimensionality; the embedding
-# provider is swappable, but the column width is fixed at table-creation time.
-EMBEDDING_DIM = 1536
+# Matches the local sentence-transformers/all-MiniLM-L6-v2 model's
+# dimensionality; the embedding provider is swappable, but the column
+# width is fixed at table-creation time.
+EMBEDDING_DIM = 384
 
 
 class RagDocument(Base):

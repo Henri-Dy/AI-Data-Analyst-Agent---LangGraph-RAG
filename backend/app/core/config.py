@@ -23,10 +23,11 @@ class Settings(BaseSettings):
     google_api_key: str | None = None
 
     # Embeddings for RAG (Anthropic has no embeddings API, so this is
-    # independent from llm_provider and defaults to OpenAI).
-    embedding_provider: Literal["openai", "gemini"] = "openai"
-    embedding_model: str = "text-embedding-3-small"
-    embedding_dimensions: int = 1536
+    # independent from llm_provider). "local" runs a sentence-transformers
+    # model on-device, free and API-key-less.
+    embedding_provider: Literal["openai", "gemini", "local"] = "local"
+    embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    embedding_dimensions: int = 384
 
     # RAG retrieval
     rag_chunk_size: int = 800

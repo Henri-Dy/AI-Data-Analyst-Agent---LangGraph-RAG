@@ -46,7 +46,7 @@ def upgrade() -> None:
     sa.Column('category', sa.String(length=100), nullable=False),
     sa.Column('content', sa.Text(), nullable=False),
     sa.Column('doc_metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-    sa.Column('embedding', pgvector.sqlalchemy.Vector(1536), nullable=True),
+    sa.Column('embedding', pgvector.sqlalchemy.Vector(384), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
